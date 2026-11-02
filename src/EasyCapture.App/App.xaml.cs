@@ -1,3 +1,5 @@
+using System.IO;
+using System.Windows;
 using EasyCapture.Core;
 using Application = System.Windows.Application;
 using StartupEventArgs = System.Windows.StartupEventArgs;
@@ -18,10 +20,12 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        LogStartup();
 
         _singleInstance = new SingleInstance();
         if (!_singleInstance.IsFirstInstance)
         {
+            DiagnosticLog.Write("second instance exiting");
             Shutdown();
             return;
         }
@@ -48,12 +52,25 @@ public partial class App : Application
             CaptureWithPreset = preset => capture.Start(preset.Id),
         };
 
+        // 임시 진단: 실행된 빌드가 맞는지 사용자가 바로 알 수 있게 시작 알림을 한 번 보인다(원인 확인 뒤 제거).
+        // 풍선은 나중 것이 앞의 것을 덮어쓰므로, 단축키 등록 실패 알림이 시작 알림에 가려지지 않게 Rebind 앞에서 보인다.
+        try
+        {
+            tray.ShowNotice($"EasyCapture 시작 (빌드 {BuildTime():yyyy-MM-dd HH:mm})");
+            DiagnosticLog.Write("startup notice shown");
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"startup notice failed: {DiagnosticLog.Describe(ex)}");
+        }
+
         _hotkeys = new HotkeyService();
         new HotkeyBinder(_hotkeys, handlers, tray.ShowNotice).Rebind(settings);
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
+        DiagnosticLog.Write($"OnExit exitCode={e.ApplicationExitCode}");
         _panel?.Dispose();
         _hotkeys?.Dispose();
         _tray?.Dispose();
@@ -93,8 +110,37 @@ public partial class App : Application
         return string.IsNullOrWhiteSpace(root) ? null : root;
     }
 
+    // 임시 진단(원인 확인 뒤 제거): 시작 환경을 한 번 기록한다. 어떤 값이 실패해도 앱 시작에는 영향이 없다.
+    private static DateTime BuildTime()
+    {
+        try
+        {
+            return File.GetLastWriteTime(typeof(App).Assembly.Location);
+        }
+        catch (Exception)
+        {
+            return DateTime.MinValue;
+        }
+    }
+
+    private static void LogStartup()
+    {
+        try
+        {
+            DiagnosticLog.Write($"startup exe={Environment.ProcessPath} pid={Environment.ProcessId}");
+            DiagnosticLog.Write($"startup build={BuildTime():yyyy-MM-dd HH:mm:ss} os={Environment.OSVersion.Version} clr={Environment.Version}");
+            DiagnosticLog.Write($"startup ClientAreaAnimation={SystemParameters.ClientAreaAnimation} systemDpiScale={DiagnosticLog.SystemDpiScale():0.##} log={DiagnosticLog.ResolvePath()}");
+            DiagnosticLog.Write($"startup dataRoot={ResolveDataRoot() ?? "(기본 %APPDATA%/%LOCALAPPDATA%)"}");
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"startup log failed: {DiagnosticLog.Describe(ex)}");
+        }
+    }
+
     private void ExitApp()
     {
+        DiagnosticLog.Write("ExitApp requested (tray menu)");
         _hotkeys?.Dispose();
         _hotkeys = null;
         _capture = null;

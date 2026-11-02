@@ -32,8 +32,10 @@ public sealed class CaptureService
     /// <summary>캡처를 시작한다. presetId가 없거나 목록에 없으면 기본 프리셋. 이미 열려 있으면 새로 만들지 않고 기존 오버레이를 앞으로 가져온다.</summary>
     public void Start(Guid? presetId = null)
     {
+        DiagnosticLog.Write($"Capture.Start called (presetId {(presetId.HasValue ? "지정" : "없음")}, overlayOpen={_overlay is not null})");
         if (_overlay is { } existing)
         {
+            DiagnosticLog.Write("Capture.Start: overlay already open -> BringToForeground only");
             try
             {
                 existing.BringToForeground();
@@ -55,6 +57,7 @@ public sealed class CaptureService
                 ?? presets.FirstOrDefault();
             if (preset is null)
             {
+                DiagnosticLog.Write("Capture.Start: no preset");
                 _notify("캡처할 프리셋이 없습니다.");
                 return;
             }
@@ -63,6 +66,7 @@ public sealed class CaptureService
             var virtualBounds = PresetGeometry.VirtualBounds(monitors);
             if (virtualBounds.IsEmpty)
             {
+                DiagnosticLog.Write("Capture.Start: no monitors");
                 _notify("모니터를 찾지 못했습니다.");
                 return;
             }
@@ -71,10 +75,20 @@ public sealed class CaptureService
             var image = ScreenCapturer.Capture(virtualBounds);
 
             var window = new CaptureOverlayWindow(image, virtualBounds, monitors, presets, preset, rect => SavePreset(rect, monitors));
-            window.Confirmed += (rect, chosen) => OnConfirmed(window, image, virtualBounds, rect, chosen);
-            window.FocusNotAcquired += () => _notify("포커스를 얻지 못해 캡처를 취소했습니다. 다른 창이 포커스를 잡고 있는지 확인하세요.");
+            var confirmed = false; // 임시 진단: 확정 없이 닫혔는지(취소) 구분용
+            window.Confirmed += (rect, chosen) =>
+            {
+                confirmed = true;
+                OnConfirmed(window, image, virtualBounds, rect, chosen);
+            };
+            window.FocusNotAcquired += () =>
+            {
+                DiagnosticLog.Write("overlay FocusNotAcquired -> notice");
+                _notify("포커스를 얻지 못해 캡처를 취소했습니다. 다른 창이 포커스를 잡고 있는지 확인하세요.");
+            };
             window.Closed += (_, _) =>
             {
+                DiagnosticLog.Write($"overlay Closed (confirmed={confirmed})");
                 if (ReferenceEquals(_overlay, window))
                 {
                     _overlay = null;
@@ -82,11 +96,14 @@ public sealed class CaptureService
             };
             overlay = _overlay = window;
 
+            DiagnosticLog.Write($"Capture.Start: preset='{preset.Name}' virtual={virtualBounds.Width}x{virtualBounds.Height} monitors={monitors.Count}");
             window.Show();
             window.BringToForeground();
+            DiagnosticLog.Write("overlay shown");
         }
         catch (Exception ex)
         {
+            DiagnosticLog.Write($"Capture.Start failed: {DiagnosticLog.Describe(ex)}");
             _overlay = null;
             TryClose(overlay);
             _notify($"캡처를 시작하지 못했습니다: {ex.Message}");
@@ -98,6 +115,7 @@ public sealed class CaptureService
     // 효과가 재생되는 동안 _overlay를 유지해, 새 캡처가 효과가 보이는 화면을 찍지 않게 한다.
     private void OnConfirmed(CaptureOverlayWindow overlay, BitmapSource image, PixelRect virtualBounds, PixelRect rect, CapturePreset preset)
     {
+        var sinceConfirm = System.Diagnostics.Stopwatch.StartNew(); // 임시 진단: 확정 이후 경과 시간
         byte[] png;
         try
         {
@@ -105,16 +123,21 @@ public sealed class CaptureService
         }
         catch (Exception ex)
         {
+            DiagnosticLog.Write($"OnConfirmed: EncodePng failed: {DiagnosticLog.Describe(ex)}");
             CloseOverlay(overlay);
             _notify($"캡처를 저장하지 못했습니다: {ex.Message}");
             return;
         }
 
+        DiagnosticLog.Write($"OnConfirmed: rect={rect.Width}x{rect.Height} png={png.Length}bytes encode={sinceConfirm.ElapsedMilliseconds}ms");
+        DiagnosticLog.Write("PlayConfirmEffect call begin");
         overlay.PlayConfirmEffect(() =>
         {
+            DiagnosticLog.Write($"effect done callback entered (+{sinceConfirm.ElapsedMilliseconds}ms since OnConfirmed)");
             CloseOverlay(overlay);
             SaveAndNotify(png, rect, preset);
         });
+        DiagnosticLog.Write($"PlayConfirmEffect call returned (+{sinceConfirm.ElapsedMilliseconds}ms)");
     }
 
     private void SaveAndNotify(byte[] png, PixelRect rect, CapturePreset preset)
@@ -123,19 +146,24 @@ public sealed class CaptureService
         try
         {
             var item = Save(png, rect, preset);
+            DiagnosticLog.Write($"Save ok {item.Width}x{item.Height}");
             notice = $"캡처됨: {preset.Name} ({item.Width}×{item.Height})";
             Captured?.Invoke(item);
+            DiagnosticLog.Write("Captured subscribers done");
         }
         catch (Exception ex)
         {
+            DiagnosticLog.Write($"Save/Captured failed: {DiagnosticLog.Describe(ex)}");
             notice = $"캡처를 저장하지 못했습니다: {ex.Message}";
         }
 
         _notify(notice);
+        DiagnosticLog.Write("notice sent");
     }
 
     private void CloseOverlay(CaptureOverlayWindow overlay)
     {
+        DiagnosticLog.Write("CloseOverlay");
         TryClose(overlay);
         if (ReferenceEquals(_overlay, overlay))
         {
