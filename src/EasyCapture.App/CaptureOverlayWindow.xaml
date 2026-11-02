@@ -1,0 +1,63 @@
+<Window x:Class="EasyCapture.App.CaptureOverlayWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="EasyCapture 캡처"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        Topmost="True"
+        Background="Black"
+        WindowStartupLocation="Manual"
+        FontFamily="Malgun Gothic, Segoe UI"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        InputMethod.IsInputMethodEnabled="False">
+    <!-- 캔버스 좌표 1 = 물리 픽셀 1. LayoutTransform(1/DPI 배율)으로 WPF의 DIP 배율을 상쇄한다. -->
+    <Canvas x:Name="Surface"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Top"
+            Background="Black"
+            ClipToBounds="True"
+            Focusable="True"
+            FocusVisualStyle="{x:Null}"
+            InputMethod.IsInputMethodEnabled="False">
+        <Canvas.LayoutTransform>
+            <ScaleTransform x:Name="PixelScale" />
+        </Canvas.LayoutTransform>
+        <Image x:Name="Backdrop"
+               Stretch="Fill"
+               IsHitTestVisible="False"
+               RenderOptions.BitmapScalingMode="NearestNeighbor" />
+        <Path x:Name="Dim"
+              Fill="#80000000"
+              IsHitTestVisible="False" />
+        <Rectangle x:Name="Frame"
+                   Stroke="#FF38A0FF"
+                   IsHitTestVisible="False" />
+        <!-- 확정 효과 전용 요소. 평소에는 숨겨 두고 효과 재생 중에만 보인다. -->
+        <Rectangle x:Name="PulseRing"
+                   Visibility="Collapsed"
+                   Opacity="0"
+                   IsHitTestVisible="False" />
+        <Canvas x:Name="Sweep"
+                Visibility="Collapsed"
+                Opacity="0"
+                IsHitTestVisible="False" />
+        <Border x:Name="Label"
+                Background="#E61E1E1E"
+                IsHitTestVisible="False">
+            <TextBlock x:Name="LabelText" Foreground="White" />
+        </Border>
+        <Grid x:Name="HelpHost" IsHitTestVisible="False">
+            <Border x:Name="Help"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Bottom"
+                    Background="#E61E1E1E">
+                <TextBlock x:Name="HelpText"
+                           Foreground="White"
+                           TextWrapping="Wrap"
+                           TextAlignment="Center" />
+            </Border>
+        </Grid>
+    </Canvas>
+</Window>

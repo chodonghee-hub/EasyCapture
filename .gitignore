@@ -1,0 +1,44 @@
+# 빌드 산출물
+bin/
+obj/
+publish/
+*.pubxml.user
+*.nupkg
+*.snupkg
+
+# IDE·사용자 설정
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+
+# 테스트·커버리지
+TestResults/
+*.trx
+coverage*.xml
+coverage.*
+*.cobertura.xml
+
+# 배포·설치 파일 (Inno Setup 출력, installer/.gitkeep 은 유지)
+installer/output/
+installer/Output/
+installer/*.exe
+
+# OS 파일
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# 시크릿·서명 파일 (절대 커밋 금지)
+*.pfx
+*.snk
+.env
+.env.*
+secrets.json
+
+# 로컬 임시 파일
+*.log
+*.stackdump
+scratch/
+tmp/
